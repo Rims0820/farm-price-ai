@@ -7,6 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const priceRoutes = require('./routes/priceRoutes');
+app.use('/api', priceRoutes);
+
+const uploadRoutes = require('./routes/uploadRoutes');
+app.use('/api/data', uploadRoutes);
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err.message));
