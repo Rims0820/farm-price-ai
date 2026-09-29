@@ -10,7 +10,7 @@ const CSV_PATH = path.join(__dirname, '..', '..', 'ml-service', 'data', 'price_h
 
 async function seed() {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, { dbName: 'farmprice' });
     console.log('MongoDB connected');
 
     const existingCount = await PriceHistory.countDocuments();
