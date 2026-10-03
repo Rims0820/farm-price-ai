@@ -13,6 +13,9 @@ app.use('/api', priceRoutes);
 const uploadRoutes = require('./routes/uploadRoutes');
 app.use('/api/data', uploadRoutes);
 
+const predictRoutes = require('./routes/predictRoutes');
+app.use('/api', predictRoutes);
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err.message));
