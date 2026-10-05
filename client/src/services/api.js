@@ -27,4 +27,9 @@ export const getPriceHistory = async (crop, market, limit = 24) => {
   return res.data;
 };
 
+export const compareMarkets = async (crop) => {
+  const res = await api.get('/compare', { params: { crop } });
+  return res.data;
+};
+
 export default api;
