@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const { startScheduler } = require('./jobs/scheduler');
 require('dotenv').config();
 
 const app = express();
@@ -19,9 +20,14 @@ app.use('/api/data', uploadRoutes);
 const predictRoutes = require('./routes/predictRoutes');
 app.use('/api', predictRoutes);
 
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err.message));
+
+startScheduler();
 
 app.get('/api/health', (req, res) =>
   res.json({ status: 'Server running', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' })

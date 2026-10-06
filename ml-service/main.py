@@ -62,6 +62,11 @@ def get_crops():
 def get_markets():
     return sorted(features_df["market"].unique().tolist())
 
+@app.post("/reload-model")
+def reload_model():
+    load_artifacts()
+    return {"status": "Model reloaded successfully"}
+
 
 @app.post("/predict")
 def predict(req: PredictRequest):
