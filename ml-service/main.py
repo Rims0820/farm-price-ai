@@ -27,10 +27,12 @@ model = None
 crop_encoder = None
 market_encoder = None
 features_df = None
+rf_model = None
+ensemble_weights = None
 
 @app.on_event("startup")
 def load_artifacts():
-    global model, crop_encoder, market_encoder, features_df
+    global model, crop_encoder, market_encoder, features_df, rf_model, ensemble_weights
     model_path = "models/xgb_price_model_final.pkl"
     if not os.path.exists(model_path):
         print("WARNING: final model not found, falling back to Day 5 model")
@@ -40,6 +42,17 @@ def load_artifacts():
     crop_encoder = joblib.load("models/crop_encoder.pkl")
     market_encoder = joblib.load("models/market_encoder.pkl")
     features_df = pd.read_csv("data/features.csv", parse_dates=["date"])
+
+    # Load ensemble components if available
+    if os.path.exists("models/rf_model.pkl") and os.path.exists("models/ensemble_weights.pkl"):
+        rf_model = joblib.load("models/rf_model.pkl")
+        ensemble_weights = joblib.load("models/ensemble_weights.pkl")
+        print("Ensemble model loaded")
+    else:
+        rf_model = None
+        ensemble_weights = None
+        print("Ensemble not found, using XGBoost only")
+
     print("Model and data loaded successfully")
 
 
@@ -94,7 +107,15 @@ def predict(req: PredictRequest):
     row["market_encoded"] = market_encoded
 
     X = row[FEATURE_COLS].values.reshape(1, -1).astype(float)
-    prediction = float(model.predict(X)[0])
+
+    xgb_prediction = float(model.predict(X)[0])
+
+    if rf_model is not None and ensemble_weights is not None:
+        rf_prediction = float(rf_model.predict(X)[0])
+        w = ensemble_weights["xgb_weight"]
+        prediction = w * xgb_prediction + (1 - w) * rf_prediction
+    else:
+        prediction = xgb_prediction
 
     # simple confidence band using historical volatility for this crop/market
     volatility = float(subset["price_std"].tail(6).mean())

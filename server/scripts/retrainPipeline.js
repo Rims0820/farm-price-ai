@@ -89,7 +89,8 @@ async function runRetrainPipeline() {
       'aggregate.py',
       'feature_engineering.py',
       'train_model.py',
-      'train_final_model.py'
+      'train_final_model.py',
+      'train_ensemble.py'
     ]) {
       log = appendLog(log, `\n--- ${scriptName} ---\n`);
       await ModelMeta.findOneAndUpdate(
