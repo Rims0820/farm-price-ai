@@ -43,6 +43,7 @@ exports.predictPrice = async (req, res) => {
         latestKnownPrice: result.latest_known_price,
         confidenceLower: result.confidence_range.lower,
         confidenceUpper: result.confidence_range.upper,
+        explanation: result.explanation,
         generatedAt: new Date()
       },
       { upsert: true, new: true }

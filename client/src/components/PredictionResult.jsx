@@ -39,6 +39,24 @@ export default function PredictionResult({ result }) {
       <div className="mt-3 text-sm text-gray-500">
         Confidence range: ₹{confidence_range.lower.toLocaleString()} – ₹{confidence_range.upper.toLocaleString()}
       </div>
+            {result.explanation && result.explanation.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-gray-100">
+          <p className="text-sm font-medium text-gray-700 mb-2">Why this prediction?</p>
+          <ul className="space-y-1.5">
+            {result.explanation.map((item, idx) => (
+              <li key={idx} className="text-sm text-gray-600 flex items-center gap-2">
+                <span className={item.effect === 'increased' ? 'text-green-600' : 'text-red-600'}>
+                  {item.effect === 'increased' ? '▲' : '▼'}
+                </span>
+                <span>{item.factor}</span>
+                <span className="text-gray-400">
+                  ({item.effect === 'increased' ? '+' : ''}₹{Math.abs(item.impact_amount).toFixed(0)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

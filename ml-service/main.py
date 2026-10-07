@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from explainer import explain_prediction
 import pandas as pd
 import joblib
 import os
@@ -122,6 +123,13 @@ def predict(req: PredictRequest):
     lower_bound = round(prediction - volatility, 2)
     upper_bound = round(prediction + volatility, 2)
 
+    feature_row_df = row[FEATURE_COLS].to_frame().T.astype(float)
+    try:
+        explanation = explain_prediction(model, feature_row_df, model_key="xgb")
+    except Exception as e:
+        print(f"SHAP explanation failed: {e}")
+        explanation = []
+
     return {
         "crop": req.crop,
         "market": req.market,
@@ -129,4 +137,5 @@ def predict(req: PredictRequest):
         "latest_known_price": round(float(latest["avg_price"]), 2),
         "predicted_next_month_price": round(prediction, 2),
         "confidence_range": {"lower": lower_bound, "upper": upper_bound},
+        "explanation": explanation
     }

@@ -8,6 +8,7 @@ const predictionSchema = new mongoose.Schema({
   latestKnownPrice: { type: Number },
   confidenceLower: { type: Number },
   confidenceUpper: { type: Number },
+  explanation: { type: Array, default: [] },   
   generatedAt: { type: Date, default: Date.now }
 });
 
