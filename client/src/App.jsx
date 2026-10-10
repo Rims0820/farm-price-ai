@@ -5,6 +5,7 @@ import PriceChart from './components/PriceChart';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import MarketComparison from './components/MarketComparison';
 import { getPricePrediction, getPriceHistory } from './services/api';
+import AdviceCard from './components/AdviceCard';
 
 function App() {
   const [result, setResult] = useState(null);
@@ -22,7 +23,7 @@ function App() {
     try {
       const [prediction, priceHistory] = await Promise.all([
         getPricePrediction(crop, market),
-        getPriceHistory(crop, market, 24),
+        getPriceHistory(crop, market, 36),
       ]);
       setResult(prediction);
       setHistory(priceHistory);
@@ -58,8 +59,9 @@ function App() {
 
         {!loading && result && (
           <>
+            <AdviceCard result={result} />
             <PredictionResult result={result} />
-            <PriceChart data={history} />
+            <PriceChart data={history} prediction={result} />
             <MarketComparison crop={lastCrop} />
           </>
         )}

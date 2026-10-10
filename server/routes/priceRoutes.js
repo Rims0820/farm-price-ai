@@ -23,17 +23,15 @@ router.get('/markets', async (req, res) => {
   }
 });
 
-// GET /api/prices?crop=Onion&market=Pune - historical prices for charting
 router.get('/prices', async (req, res) => {
   try {
-    const { crop, market, limit = 200 } = req.query;
+    const { crop, market } = req.query;
     if (!crop || !market) {
       return res.status(400).json({ error: 'crop and market query params are required' });
     }
-    const data = await PriceHistory.find({ crop, market })
-      .sort({ date: 1 })
-      .limit(parseInt(limit));
-    res.json(data);
+    const limit = Math.min(parseInt(req.query.limit) || 36, 500);
+    const data = await PriceHistory.find({ crop, market }).sort({ date: -1 }).limit(limit);
+    res.json(data.reverse());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
