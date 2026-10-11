@@ -47,6 +47,12 @@ if __name__ == "__main__":
     preds = model.predict(test_df[FEATURE_COLS])
     evaluate(test_df[TARGET_COL].values, preds, "TUNED MODEL (test set)")
 
+    out = test_df.copy()
+    out["prediction"] = preds
+    out["abs_error"] = (out["prediction"] - out[TARGET_COL]).abs()
+    out["pct_error"] = out["abs_error"] / out[TARGET_COL] * 100
+    out.to_csv("data/test_predictions.csv", index=False)
+
     # Compare to Day 5's default-params model for a clear before/after
     old_model = joblib.load("models/xgb_price_model.pkl")
     old_preds = old_model.predict(test_df[FEATURE_COLS])

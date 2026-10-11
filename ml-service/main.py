@@ -139,3 +139,53 @@ def predict(req: PredictRequest):
         "confidence_range": {"lower": lower_bound, "upper": upper_bound},
         "explanation": explanation
     }
+
+def reliability(mape: float) -> dict:
+    if mape < 5:
+        return {"level": "High", "note": "Reliable for planning"}
+    if mape < 10:
+        return {"level": "Moderate", "note": "Useful guide, expect some error"}
+    return {"level": "Low", "note": "Volatile price - use with caution"}
+
+
+@app.get("/model-metrics")
+def model_metrics():
+    path = "data/test_predictions.csv"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404,
+                            detail="No test results yet. Run train_model.py and train_final_model.py.")
+    t = pd.read_csv(path, parse_dates=["date"])
+    target = t["target_next_month"]
+    t["model_pct"] = (t["prediction"] - target).abs() / target * 100
+    t["naive_pct"] = (t["avg_price"] - target).abs() / target * 100
+    t["abs_err"] = (t["prediction"] - target).abs()
+
+    per_crop = []
+    for crop, g in t.groupby("crop"):
+        mape = float(g["model_pct"].mean())
+        per_crop.append({
+            "crop": crop,
+            "mape": round(mape, 2),
+            "naive_mape": round(float(g["naive_pct"].mean()), 2),
+            "mae": round(float(g["abs_err"].mean()), 2),
+            "samples": int(len(g)),
+            **reliability(mape),
+        })
+    per_crop.sort(key=lambda r: r["mape"])
+
+    walk_forward = []
+    if os.path.exists("data/walk_forward_results.csv"):
+        walk_forward = pd.read_csv("data/walk_forward_results.csv").fillna(0).to_dict(orient="records")
+
+    return {
+        "overall": {
+            "mape": round(float(t["model_pct"].mean()), 2),
+            "naive_mape": round(float(t["naive_pct"].mean()), 2),
+            "mae": round(float(t["abs_err"].mean()), 2),
+            "samples": int(len(t)),
+            "test_start": t["date"].min().strftime("%Y-%m-%d"),
+            "test_end": t["date"].max().strftime("%Y-%m-%d"),
+        },
+        "per_crop": per_crop,
+        "walk_forward": walk_forward,
+    }

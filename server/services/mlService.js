@@ -34,4 +34,23 @@ async function getAvailableMarkets() {
   return response.data;
 }
 
-module.exports = { getPrediction, getAvailableCrops, getAvailableMarkets };
+async function getMetrics() {
+  try {
+    const response = await axios.get(`${ML_URL}/model-metrics`, { timeout: 10000 });
+    return response.data;
+  } catch (err) {
+    if (err.response) {
+      const error = new Error(err.response.data.detail || 'ML service error');
+      error.statusCode = err.response.status;
+      throw error;
+    }
+    if (err.code === 'ECONNREFUSED') {
+      const error = new Error('ML service is not reachable. Make sure it is running on port 8000.');
+      error.statusCode = 503;
+      throw error;
+    }
+    throw err;
+  }
+}
+
+module.exports = { getPrediction, getAvailableCrops, getAvailableMarkets, getMetrics };

@@ -1,4 +1,5 @@
 const { execFile } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const axios = require('axios');
@@ -6,6 +7,7 @@ require('dotenv').config();
 
 const PriceHistory = require('../models/PriceHistory');
 const ModelMeta = require('../models/ModelMeta');
+const Prediction = require('../models/Prediction');
 
 const ML_SERVICE_DIR = path.join(__dirname, '..', '..', 'ml-service');
 const VENV_PYTHON = process.platform === 'win32'
@@ -41,6 +43,20 @@ function appendLog(log, text) {
   return firstNewline === -1 ? tail : tail.slice(firstNewline + 1);
 }
 
+function getScripts() {
+  const scripts = [
+    'aggregate.py',
+    'feature_engineering.py',
+    'train_model.py',
+    'train_final_model.py'
+  ];
+  // An ensemble trained earlier must be retrained too, or it goes stale.
+  if (fs.existsSync(path.join(ML_SERVICE_DIR, 'models', 'rf_model.pkl'))) {
+    scripts.push('train_ensemble.py');
+  }
+  return scripts;
+}
+
 async function shouldRetrain() {
   const currentCount = await PriceHistory.countDocuments();
   const meta = await ModelMeta.findOne({ key: 'global' });
@@ -50,18 +66,20 @@ async function shouldRetrain() {
     return { retrain: true, currentCount };
   }
 
-  const newRowsSinceLastTrain = currentCount - meta.lastDataCountAtTraining;
+  // Absolute change: rows can also DROP (e.g. demo data removed)
+  const changedRows = Math.abs(currentCount - meta.lastDataCountAtTraining);
   console.log(`Current rows: ${currentCount}, rows at last training: ${meta.lastDataCountAtTraining}`);
-  console.log(`New rows since last training: ${newRowsSinceLastTrain}`);
+  console.log(`Rows changed since last training: ${changedRows}`);
 
-  // Retrain only if meaningful new data has arrived (threshold avoids retraining on tiny changes)
   const THRESHOLD = 50;
-  return { retrain: newRowsSinceLastTrain >= THRESHOLD, currentCount };
+  return { retrain: changedRows >= THRESHOLD, currentCount };
 }
 
-async function runRetrainPipeline() {
-  // Only manage the connection ourselves if nothing is already connected.
-  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+async function saveMeta(fields) {
+  await ModelMeta.findOneAndUpdate({ key: 'global' }, fields, { upsert: true });
+}
+
+async function runRetrainPipeline({ force = false } = {}) {
   const shouldManageConnection = mongoose.connection.readyState === 0;
   let log = '';
 
@@ -70,74 +88,49 @@ async function runRetrainPipeline() {
       await mongoose.connect(process.env.MONGO_URI);
     }
 
-    const { retrain, currentCount } = await shouldRetrain();
+    const decision = await shouldRetrain();
+    const currentCount = decision.currentCount;
 
-    if (!retrain) {
+    if (!force && !decision.retrain) {
       console.log('Not enough new data to justify retraining. Skipping.');
       return;
     }
 
     console.log('Starting retrain pipeline...');
     log = appendLog(log, 'Training started.\n');
-    await ModelMeta.findOneAndUpdate(
-      { key: 'global' },
-      { lastTrainingStatus: 'in_progress', lastTrainingLog: log },
-      { upsert: true }
-    );
+    await saveMeta({ lastTrainingStatus: 'in_progress', lastTrainingLog: log });
 
-    for (const scriptName of [
-      'aggregate.py',
-      'feature_engineering.py',
-      'train_model.py',
-      'train_final_model.py',
-      'train_ensemble.py'
-    ]) {
+    for (const scriptName of getScripts()) {
       log = appendLog(log, `\n--- ${scriptName} ---\n`);
-      await ModelMeta.findOneAndUpdate(
-        { key: 'global' },
-        { lastTrainingStatus: 'in_progress', lastTrainingLog: log },
-        { upsert: true }
-      );
+      await saveMeta({ lastTrainingStatus: 'in_progress', lastTrainingLog: log });
 
       log = appendLog(log, await runScript(scriptName));
-      await ModelMeta.findOneAndUpdate(
-        { key: 'global' },
-        { lastTrainingStatus: 'in_progress', lastTrainingLog: log },
-        { upsert: true }
-      );
+      await saveMeta({ lastTrainingStatus: 'in_progress', lastTrainingLog: log });
     }
 
-    // Tell the ML service to reload the freshly trained model
     try {
       await axios.post(`${process.env.ML_SERVICE_URL || 'http://localhost:8000'}/reload-model`);
       console.log('ML service notified to reload model.');
     } catch (reloadErr) {
-      const message = `Model reload warning: ${reloadErr.message}`;
-      log = appendLog(log, `\n${message}\n`);
+      log = appendLog(log, `\nModel reload warning: ${reloadErr.message}\n`);
       console.warn('Could not notify ML service to reload (is it running?):', reloadErr.message);
     }
 
+    await Prediction.deleteMany({}); // cached forecasts came from the old model
+
     log = appendLog(log, '\nRetraining pipeline completed successfully.\n');
-    await ModelMeta.findOneAndUpdate(
-      { key: 'global' },
-      {
-        lastTrainedAt: new Date(),
-        lastDataCountAtTraining: currentCount,
-        lastTrainingStatus: 'success',
-        lastTrainingLog: log
-      },
-      { upsert: true }
-    );
+    await saveMeta({
+      lastTrainedAt: new Date(),
+      lastDataCountAtTraining: currentCount,
+      lastTrainingStatus: 'success',
+      lastTrainingLog: log
+    });
     console.log('Retraining pipeline completed successfully.');
   } catch (err) {
     log = appendLog(log, `\nRetraining failed:\n${err.message}\n`);
     console.error('Retraining failed:', err.message);
     try {
-      await ModelMeta.findOneAndUpdate(
-        { key: 'global' },
-        { lastTrainingStatus: 'failed', lastTrainingLog: log },
-        { upsert: true }
-      );
+      await saveMeta({ lastTrainingStatus: 'failed', lastTrainingLog: log });
     } catch (metaErr) {
       console.error('Could not save failed training status:', metaErr.message);
     }
@@ -149,9 +142,9 @@ async function runRetrainPipeline() {
   }
 }
 
-function retrainPipeline() {
+function retrainPipeline(options) {
   if (!activePipeline) {
-    activePipeline = runRetrainPipeline().finally(() => {
+    activePipeline = runRetrainPipeline(options).finally(() => {
       activePipeline = null;
     });
   }
@@ -160,9 +153,9 @@ function retrainPipeline() {
 
 module.exports = { retrainPipeline };
 
-// Allow running directly: node scripts/retrainPipeline.js
+// node scripts/retrainPipeline.js   (add --force to skip the row-count check)
 if (require.main === module) {
-  retrainPipeline()
+  retrainPipeline({ force: process.argv.includes('--force') })
     .then(() => process.exit(0))
     .catch(() => process.exit(1));
 }
