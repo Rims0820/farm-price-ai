@@ -1,26 +1,25 @@
-import pandas as pd
-import numpy as np
-import xgboost as xgb
 import joblib
+import numpy as np
+import pandas as pd
+import xgboost as xgb
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+from config import get_split_date
 
 FEATURE_COLS = [
     "lag_1", "lag_2", "lag_3", "lag_6", "lag_12",
     "roll_mean_3", "roll_mean_6", "roll_std_3",
     "pct_change_1m", "pct_change_3m",
     "month_sin", "month_cos", "time_index", "price_std",
-    "crop_encoded", "market_encoded"
+    "crop_encoded", "market_encoded",
 ]
 TARGET_COL = "target_next_month"
-SPLIT_DATE = "2025-06-01"  # same test cutoff as Day 5, for a fair comparison
 
 
 def load_data():
     df = pd.read_csv("data/features.csv", parse_dates=["date"])
-    crop_encoder = joblib.load("models/crop_encoder.pkl")
-    market_encoder = joblib.load("models/market_encoder.pkl")
-    df["crop_encoded"] = crop_encoder.transform(df["crop"])
-    df["market_encoded"] = market_encoder.transform(df["market"])
+    df["crop_encoded"] = joblib.load("models/crop_encoder.pkl").transform(df["crop"])
+    df["market_encoded"] = joblib.load("models/market_encoder.pkl").transform(df["market"])
     return df
 
 
@@ -38,28 +37,27 @@ if __name__ == "__main__":
     best_params["random_state"] = 42
     best_params["objective"] = "reg:squarederror"
 
-    train_df = df[df["date"] < SPLIT_DATE]
-    test_df = df[df["date"] >= SPLIT_DATE]
+    split = get_split_date(df)
+    train_df = df[df["date"] < split]
+    test_df = df[df["date"] >= split].copy()
 
     model = xgb.XGBRegressor(**best_params)
     model.fit(train_df[FEATURE_COLS], train_df[TARGET_COL])
-
     preds = model.predict(test_df[FEATURE_COLS])
     evaluate(test_df[TARGET_COL].values, preds, "TUNED MODEL (test set)")
 
-    out = test_df.copy()
-    out["prediction"] = preds
-    out["abs_error"] = (out["prediction"] - out[TARGET_COL]).abs()
-    out["pct_error"] = out["abs_error"] / out[TARGET_COL] * 100
-    out.to_csv("data/test_predictions.csv", index=False)
-
-    # Compare to Day 5's default-params model for a clear before/after
     old_model = joblib.load("models/xgb_price_model.pkl")
-    old_preds = old_model.predict(test_df[FEATURE_COLS])
-    evaluate(test_df[TARGET_COL].values, old_preds, "OLD MODEL (Day 5 defaults)")
+    evaluate(test_df[TARGET_COL].values, old_model.predict(test_df[FEATURE_COLS]), "OLD MODEL (default params)")
 
-    # Retrain on ALL data (train+test) for the production model — more data = better real forecasts
+    # Save the tuned model's held-out predictions: the Accuracy page and the
+    # forecast confidence range are both computed from this file.
+    test_df["prediction"] = preds
+    test_df["abs_error"] = (test_df["prediction"] - test_df[TARGET_COL]).abs()
+    test_df["pct_error"] = test_df["abs_error"] / test_df[TARGET_COL] * 100
+    test_df.to_csv("data/test_predictions.csv", index=False)
+
+    # Production model: retrain on ALL data
     full_model = xgb.XGBRegressor(**best_params)
     full_model.fit(df[FEATURE_COLS], df[TARGET_COL])
     joblib.dump(full_model, "models/xgb_price_model_final.pkl")
-    print("\nFinal production model (trained on all data) saved to models/xgb_price_model_final.pkl")
+    print("\nFinal production model saved to models/xgb_price_model_final.pkl")

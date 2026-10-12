@@ -5,6 +5,7 @@ const ModelMeta = require('../models/ModelMeta');
 const adminAuth = require('../middleware/adminAuth');
 
 router.post('/retrain-now', adminAuth, (req, res) => {
+  // respond immediately, run in background (retraining takes time)
   res.json({ message: 'Retraining started in background. Check /api/admin/status for progress.' });
   retrainPipeline({ force: true }).catch((err) => console.error('Background retrain error:', err.message));
 });

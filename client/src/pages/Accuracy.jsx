@@ -101,7 +101,7 @@ export default function Accuracy() {
         <section className={card}>
           <h2 className="text-lg font-semibold text-gray-800">Does it hold up over time?</h2>
           <p className="text-sm text-gray-500 mt-1">
-            The model is retrained and tested on several separate time periods. Similar errors across periods mean the result is not a lucky one-off.
+            The model is retrained and tested on four consecutive 3-month periods. Similar errors across periods mean the result is not a lucky one-off.
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm text-left">

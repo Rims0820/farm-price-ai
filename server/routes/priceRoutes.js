@@ -5,8 +5,7 @@ const PriceHistory = require('../models/PriceHistory');
 // GET /api/crops - list all distinct crops
 router.get('/crops', async (req, res) => {
   try {
-    const crops = await PriceHistory.distinct('crop');
-    res.json(crops);
+    res.json(await PriceHistory.distinct('crop'));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -16,13 +15,13 @@ router.get('/crops', async (req, res) => {
 router.get('/markets', async (req, res) => {
   try {
     const filter = req.query.state ? { state: req.query.state } : {};
-    const markets = await PriceHistory.find(filter).distinct('market');
-    res.json(markets);
+    res.json(await PriceHistory.find(filter).distinct('market'));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// GET /api/prices?crop=Onion&market=Pune&limit=36 - the MOST RECENT `limit` records, oldest first
 router.get('/prices', async (req, res) => {
   try {
     const { crop, market } = req.query;

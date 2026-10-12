@@ -31,4 +31,4 @@ venv/
 *.log
 
 # Uploads
-server/uploads/
+server/uploads/ml-service/data/raw/

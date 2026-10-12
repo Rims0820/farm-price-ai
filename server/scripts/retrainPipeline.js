@@ -50,7 +50,8 @@ function getScripts() {
     'train_model.py',
     'train_final_model.py'
   ];
-  // An ensemble trained earlier must be retrained too, or it goes stale.
+  // If an ensemble was ever trained, it must be retrained too: its encoders and
+  // weights go stale as soon as the data changes.
   if (fs.existsSync(path.join(ML_SERVICE_DIR, 'models', 'rf_model.pkl'))) {
     scripts.push('train_ensemble.py');
   }
@@ -80,6 +81,7 @@ async function saveMeta(fields) {
 }
 
 async function runRetrainPipeline({ force = false } = {}) {
+  // Only manage the connection ourselves if nothing is already connected.
   const shouldManageConnection = mongoose.connection.readyState === 0;
   let log = '';
 
@@ -108,6 +110,7 @@ async function runRetrainPipeline({ force = false } = {}) {
       await saveMeta({ lastTrainingStatus: 'in_progress', lastTrainingLog: log });
     }
 
+    // Tell the ML service to reload the freshly trained model
     try {
       await axios.post(`${process.env.ML_SERVICE_URL || 'http://localhost:8000'}/reload-model`);
       console.log('ML service notified to reload model.');
@@ -116,7 +119,8 @@ async function runRetrainPipeline({ force = false } = {}) {
       console.warn('Could not notify ML service to reload (is it running?):', reloadErr.message);
     }
 
-    await Prediction.deleteMany({}); // cached forecasts came from the old model
+    // Cached forecasts came from the old model
+    await Prediction.deleteMany({});
 
     log = appendLog(log, '\nRetraining pipeline completed successfully.\n');
     await saveMeta({
@@ -153,7 +157,7 @@ function retrainPipeline(options) {
 
 module.exports = { retrainPipeline };
 
-// node scripts/retrainPipeline.js   (add --force to skip the row-count check)
+// Allow running directly: node scripts/retrainPipeline.js  (add --force to skip the row-count check)
 if (require.main === module) {
   retrainPipeline({ force: process.argv.includes('--force') })
     .then(() => process.exit(0))

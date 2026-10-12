@@ -8,6 +8,7 @@ function startScheduler() {
     try {
       await retrainPipeline();
     } catch (err) {
+      // already logged and saved to ModelMeta; never let a failed run crash the server
       console.error('Scheduled retrain failed:', err.message);
     }
   });

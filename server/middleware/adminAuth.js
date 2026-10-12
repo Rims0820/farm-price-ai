@@ -1,3 +1,5 @@
+// Protects write actions (upload, delete, retrain). If ADMIN_KEY is not set
+// (local development) everything is allowed; set it before deploying.
 module.exports = function adminAuth(req, res, next) {
   const key = process.env.ADMIN_KEY;
   if (!key) return next();

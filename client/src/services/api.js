@@ -7,32 +7,21 @@ const api = axios.create({
   timeout: 15000,
 });
 
-export const getCrops = async () => {
-  const res = await api.get('/ml-crops');
-  return res.data;
-};
-
-export const getMarkets = async () => {
-  const res = await api.get('/ml-markets');
-  return res.data;
-};
-
-export const getPricePrediction = async (crop, market) => {
-  const res = await api.post('/predict', { crop, market });
-  return res.data;
-};
-
-export const getPriceHistory = async (crop, market, limit = 24) => {
-  const res = await api.get('/prices', { params: { crop, market, limit } });
-  return res.data;
-};
-
-export const compareMarkets = async (crop) => {
-  const res = await api.get('/compare', { params: { crop } });
-  return res.data;
-};
-
 const adminHeaders = (key) => (key ? { 'x-admin-key': key } : {});
+
+export const getCrops = async () => (await api.get('/ml-crops')).data;
+export const getMarkets = async () => (await api.get('/ml-markets')).data;
+
+export const getPricePrediction = async (crop, market) =>
+  (await api.post('/predict', { crop, market })).data;
+
+export const getPriceHistory = async (crop, market, limit = 36) =>
+  (await api.get('/prices', { params: { crop, market, limit } })).data;
+
+export const compareMarkets = async (crop) =>
+  (await api.get('/compare', { params: { crop } })).data;
+
+export const getModelMetrics = async () => (await api.get('/metrics')).data;
 
 export const getDataSummary = async () => (await api.get('/data/summary')).data;
 
@@ -56,7 +45,5 @@ export const triggerRetrain = async (adminKey) =>
   (await api.post('/admin/retrain-now', {}, { headers: adminHeaders(adminKey) })).data;
 
 export const getRetrainStatus = async () => (await api.get('/admin/status')).data;
-
-export const getModelMetrics = async () => (await api.get('/metrics')).data;
 
 export default api;

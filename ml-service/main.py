@@ -1,16 +1,30 @@
+import os
+
+import joblib
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from explainer import explain_prediction
-import pandas as pd
-import joblib
-import os
+
+try:
+    from explainer import explain_prediction
+except Exception:  # explainer.py (Day 12) missing -> predictions still work
+    explain_prediction = None
+
+load_dotenv()
 
 app = FastAPI(title="Farm Price ML Service")
 
+allowed_origins = ["http://localhost:5000", "http://localhost:5173"]
+for var in ("CLIENT_URL", "SERVER_URL"):
+    if os.getenv(var):
+        allowed_origins.append(os.getenv(var))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000", "http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -20,23 +34,27 @@ FEATURE_COLS = [
     "roll_mean_3", "roll_mean_6", "roll_std_3",
     "pct_change_1m", "pct_change_3m",
     "month_sin", "month_cos", "time_index", "price_std",
-    "crop_encoded", "market_encoded"
+    "crop_encoded", "market_encoded",
 ]
 
-# --- Load model and data once at startup ---
 model = None
 crop_encoder = None
 market_encoder = None
-features_df = None
+features_df = None   # training rows (have a target)
+latest_df = None     # newest row per crop+market (used to forecast)
 rf_model = None
 ensemble_weights = None
+crop_error = {}      # typical forecast error (RMSE, INR/quintal) per crop
+
 
 @app.on_event("startup")
 def load_artifacts():
-    global model, crop_encoder, market_encoder, features_df, rf_model, ensemble_weights
+    global model, crop_encoder, market_encoder, features_df, latest_df
+    global rf_model, ensemble_weights, crop_error
+
     model_path = "models/xgb_price_model_final.pkl"
     if not os.path.exists(model_path):
-        print("WARNING: final model not found, falling back to Day 5 model")
+        print("WARNING: final model not found, falling back to the default model")
         model_path = "models/xgb_price_model.pkl"
 
     model = joblib.load(model_path)
@@ -44,15 +62,26 @@ def load_artifacts():
     market_encoder = joblib.load("models/market_encoder.pkl")
     features_df = pd.read_csv("data/features.csv", parse_dates=["date"])
 
-    # Load ensemble components if available
+    if os.path.exists("data/features_latest.csv"):
+        latest_df = pd.read_csv("data/features_latest.csv", parse_dates=["date"])
+    else:
+        print("WARNING: data/features_latest.csv missing - re-run feature_engineering.py. "
+              "Falling back to features.csv (forecast will be one month behind).")
+        latest_df = features_df
+
     if os.path.exists("models/rf_model.pkl") and os.path.exists("models/ensemble_weights.pkl"):
         rf_model = joblib.load("models/rf_model.pkl")
         ensemble_weights = joblib.load("models/ensemble_weights.pkl")
         print("Ensemble model loaded")
     else:
-        rf_model = None
-        ensemble_weights = None
+        rf_model, ensemble_weights = None, None
         print("Ensemble not found, using XGBoost only")
+
+    crop_error = {}
+    if os.path.exists("data/test_predictions.csv"):
+        t = pd.read_csv("data/test_predictions.csv")
+        t["resid"] = t["prediction"] - t["target_next_month"]
+        crop_error = {c: float(np.sqrt((g["resid"] ** 2).mean())) for c, g in t.groupby("crop")}
 
     print("Model and data loaded successfully")
 
@@ -76,26 +105,17 @@ def get_crops():
 def get_markets():
     return sorted(features_df["market"].unique().tolist())
 
-@app.post("/reload-model")
-def reload_model():
-    load_artifacts()
-    return {"status": "Model reloaded successfully"}
-
 
 @app.post("/predict")
 def predict(req: PredictRequest):
-    subset = features_df[
-        (features_df["crop"] == req.crop) & (features_df["market"] == req.market)
-    ].sort_values("date")
-
-    if subset.empty:
+    rows = latest_df[(latest_df["crop"] == req.crop) & (latest_df["market"] == req.market)].sort_values("date")
+    if rows.empty:
         raise HTTPException(
             status_code=404,
             detail=f"No data found for crop='{req.crop}', market='{req.market}'. "
-                    f"Available crops: {sorted(features_df['crop'].unique().tolist())}"
+                   f"Available crops: {sorted(features_df['crop'].unique().tolist())}",
         )
-
-    latest = subset.iloc[-1]
+    latest = rows.iloc[-1]
 
     try:
         crop_encoded = crop_encoder.transform([req.crop])[0]
@@ -108,27 +128,28 @@ def predict(req: PredictRequest):
     row["market_encoded"] = market_encoded
 
     X = row[FEATURE_COLS].values.reshape(1, -1).astype(float)
-
     xgb_prediction = float(model.predict(X)[0])
-
     if rf_model is not None and ensemble_weights is not None:
-        rf_prediction = float(rf_model.predict(X)[0])
         w = ensemble_weights["xgb_weight"]
-        prediction = w * xgb_prediction + (1 - w) * rf_prediction
+        prediction = w * xgb_prediction + (1 - w) * float(rf_model.predict(X)[0])
     else:
         prediction = xgb_prediction
 
-    # simple confidence band using historical volatility for this crop/market
-    volatility = float(subset["price_std"].tail(6).mean())
-    lower_bound = round(prediction - volatility, 2)
-    upper_bound = round(prediction + volatility, 2)
+    # Confidence range = the model's typical error for this crop on held-out months
+    err = crop_error.get(req.crop)
+    if err is None:
+        hist = features_df[(features_df["crop"] == req.crop) & (features_df["market"] == req.market)]
+        err = float(hist["price_std"].tail(6).mean()) if not hist.empty else 0.0
+    lower_bound = round(max(prediction - err, 0), 2)
+    upper_bound = round(prediction + err, 2)
 
-    feature_row_df = row[FEATURE_COLS].to_frame().T.astype(float)
-    try:
-        explanation = explain_prediction(model, feature_row_df, model_key="xgb")
-    except Exception as e:
-        print(f"SHAP explanation failed: {e}")
-        explanation = []
+    explanation = []
+    if explain_prediction is not None:
+        try:
+            feature_row_df = row[FEATURE_COLS].to_frame().T.astype(float)
+            explanation = explain_prediction(model, feature_row_df, model_key=f"xgb-{id(model)}")
+        except Exception as e:
+            print(f"SHAP explanation failed: {e}")
 
     return {
         "crop": req.crop,
@@ -137,8 +158,9 @@ def predict(req: PredictRequest):
         "latest_known_price": round(float(latest["avg_price"]), 2),
         "predicted_next_month_price": round(prediction, 2),
         "confidence_range": {"lower": lower_bound, "upper": upper_bound},
-        "explanation": explanation
+        "explanation": explanation,
     }
+
 
 def reliability(mape: float) -> dict:
     if mape < 5:
@@ -189,3 +211,9 @@ def model_metrics():
         "per_crop": per_crop,
         "walk_forward": walk_forward,
     }
+
+
+@app.post("/reload-model")
+def reload_model():
+    load_artifacts()
+    return {"status": "Model reloaded successfully"}
