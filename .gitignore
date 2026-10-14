@@ -32,3 +32,6 @@ venv/
 
 # Uploads
 server/uploads/ml-service/data/raw/
+
+# Model files the deployed ML service needs
+!ml-service/models/*.pkl

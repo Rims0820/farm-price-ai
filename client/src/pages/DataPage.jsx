@@ -37,7 +37,6 @@ export default function DataPage() {
     getRetrainStatus().then(setStatus).catch(() => {});
   }, [loadSummary]);
 
-  // Poll training status until it finishes
   useEffect(() => {
     if (!polling) return undefined;
     const started = Date.now();
@@ -107,6 +106,7 @@ export default function DataPage() {
 
   const hasDemo = summary?.sources?.some((s) => s.source === 'seed');
   const training = polling || status?.lastTrainingStatus === 'in_progress';
+  const retrainEnabled = status?.retrainEnabled !== false;
 
   return (
     <div className="space-y-6">
@@ -151,8 +151,6 @@ export default function DataPage() {
         )}
         {hasDemo && (
           <div className="mt-4 bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
-            The app still contains demo data. Forecasts built on it do not reflect real prices.
-            After uploading real data, remove the demo rows so the two are not mixed.
             <div className="mt-2">
               <button onClick={handleDeleteDemo} disabled={!!busy}
                 className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white text-sm px-4 py-1.5 rounded-md">
@@ -167,7 +165,6 @@ export default function DataPage() {
         <h2 className="text-lg font-semibold text-gray-800">Upload price data</h2>
         <p className="text-sm text-gray-500 mt-1">
           CSV with these columns: <code className="bg-gray-100 px-1 rounded">crop, state, market, date, minPrice, maxPrice, modalPrice</code>.
-          Prices are in INR per quintal. Uploading the same crop, market and date again updates the row instead of duplicating it.
         </p>
         <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
           <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0] || null)}
@@ -178,7 +175,7 @@ export default function DataPage() {
         </div>
         <div className="mt-4">
           <label className="block text-xs text-gray-500 mb-1">
-            Admin key (leave empty when running locally)
+            Admin key (enter the same value as server ADMIN_KEY)
           </label>
           <input type="password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)}
             className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-full sm:w-72 bg-white" />
@@ -190,8 +187,14 @@ export default function DataPage() {
         <p className="text-sm text-gray-500 mt-1">
           Rebuilds the forecasts from the data above. The model also retrains automatically every night when enough data has changed.
         </p>
+        {!retrainEnabled && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-3 mt-3">
+            Retraining is turned off on this server. The model is trained on a developer's computer
+            and deployed together with the app.
+          </p>
+        )}
         <div className="mt-4 flex items-center gap-4">
-          <button onClick={handleRetrain} disabled={!!busy || training} className={primaryBtn}>
+          <button onClick={handleRetrain} disabled={!!busy || training || !retrainEnabled} className={primaryBtn}>
             {training ? 'Training...' : 'Retrain now'}
           </button>
           {status && (
