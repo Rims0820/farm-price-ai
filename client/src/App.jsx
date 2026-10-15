@@ -34,8 +34,9 @@ export default function App() {
           </Routes>
         </main>
 
-        <footer className="text-center text-xs text-gray-400 py-6">
-          Forecasts are AI-generated estimates based on historical trends — not financial advice.
+        <footer className="text-center text-xs text-gray-400 py-6 px-4 space-y-1">
+          <p>Forecasts are AI-generated estimates based on historical trends — not financial advice.</p>
+          <p>Data: World Food Programme, India Food Prices (source: Department of Consumer Affairs), via the Humanitarian Data Exchange.</p>
         </footer>
       </div>
     </BrowserRouter>

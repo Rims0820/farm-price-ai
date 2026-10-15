@@ -6,6 +6,7 @@ import PriceChart from '../components/PriceChart';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import MarketComparison from '../components/MarketComparison';
 import { getPricePrediction, getPriceHistory } from '../services/api';
+import DataNotice from '../components/DataNotice';
 
 export default function Forecast() {
   const [result, setResult] = useState(null);
@@ -36,6 +37,7 @@ export default function Forecast() {
 
   return (
     <>
+      <DataNotice />
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 border border-gray-100">
         <PredictionForm onPredict={handlePredict} loading={loading} />
       </div>
