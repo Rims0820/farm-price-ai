@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 try:
     from explainer import explain_prediction
-except Exception:  # explainer.py (Day 12) missing -> predictions still work
+except Exception:  
     explain_prediction = None
 
 load_dotenv()
@@ -40,11 +40,11 @@ FEATURE_COLS = [
 model = None
 crop_encoder = None
 market_encoder = None
-features_df = None   # training rows (have a target)
-latest_df = None     # newest row per crop+market (used to forecast)
+features_df = None   
+latest_df = None     
 rf_model = None
 ensemble_weights = None
-crop_error = {}      # typical forecast error (RMSE, INR/quintal) per crop
+crop_error = {}      
 
 
 @app.on_event("startup")
@@ -135,7 +135,6 @@ def predict(req: PredictRequest):
     else:
         prediction = xgb_prediction
 
-    # Confidence range = the model's typical error for this crop on held-out months
     err = crop_error.get(req.crop)
     if err is None:
         hist = features_df[(features_df["crop"] == req.crop) & (features_df["market"] == req.market)]

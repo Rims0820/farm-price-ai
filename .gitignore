@@ -28,6 +28,9 @@ venv/
 # OS/editor files
 .DS_Store
 .vscode/
+!.vscode/
+.vscode/*
+!.vscode/settings.json
 *.log
 
 # Uploads

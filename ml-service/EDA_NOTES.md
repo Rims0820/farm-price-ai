@@ -1,4 +1,4 @@
-# EDA Findings — Day 3
+# EDA Findings 
 
 ## Dataset
 - ~2,000 monthly records across 5 crops × 5 markets, 2020–2026 (synthetic)
@@ -10,7 +10,7 @@
 - Wheat and Rice are comparatively stable — good candidates for validating baseline model accuracy first
 - [Add your own observations after reviewing the charts]
 
-## Implications for feature engineering (Day 4)
+## Implications for feature engineering 
 - Include lag features: last 1, 3, 6 month prices
 - Include month as a cyclical/categorical feature (not raw integer)
 - Consider per-crop models given differing volatility patterns
