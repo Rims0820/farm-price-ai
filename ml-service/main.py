@@ -8,12 +8,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-try:
-    from explainer import explain_prediction
-except Exception:  
-    explain_prediction = None
-
-load_dotenv()
+explain_prediction = None
+if os.getenv("ENABLE_EXPLANATIONS", "true").lower() == "true":
+    try:
+        from explainer import explain_prediction
+    except Exception:
+        explain_prediction = None
 
 app = FastAPI(title="Farm Price ML Service")
 
