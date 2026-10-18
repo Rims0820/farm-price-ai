@@ -29,9 +29,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get('/api/health', (req, res) =>
-  res.json({ status: 'Server running', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' })
-);
+const healthResponse = (req, res) => {
+  res.json({
+    status: 'Server running',
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    uptime: process.uptime(),
+  });
+};
+
+app.get('/health', healthResponse);
+app.get('/api/health', healthResponse);
 
 app.use('/api', priceRoutes);
 app.use('/api/data', uploadRoutes);

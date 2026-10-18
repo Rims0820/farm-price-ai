@@ -110,7 +110,7 @@ python check_artifacts.py
 | Service | Platform | Notes |
 |---|---|---|
 | Client | Vercel | Root `client`. Set `VITE_API_URL` to `https://<server>/api` |
-| Server | Render | Root `server`. Set `MONGO_URI`, `ADMIN_KEY`, `ML_SERVICE_URL`, `CLIENT_URL`, `NODE_ENV=production`, `RETRAIN_ENABLED=false` |
+| Server | Render | Root `server`. Set `MONGO_URI`, `ADMIN_KEY`, `ML_SERVICE_URL`, `CLIENT_URL`, `NODE_ENV=production`, `RETRAIN_ENABLED=false`. Health check path: `/health` or `/api/health` |
 | ML service | Render | Root `ml-service`. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT` |
 
 **Retraining is local only.** The deployed services are separate machines and the ML service has no training pipeline or database access, so the Retrain button is disabled in production. To update the model: retrain locally, run `python check_artifacts.py`, commit the new `.pkl` and `.csv` files, and push. Render redeploys automatically.
