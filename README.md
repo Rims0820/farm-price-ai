@@ -117,7 +117,7 @@ For the Server's `ML_SERVICE_URL`, use the ML service's Render internal URL (or 
 
 **Retraining is local only.** The deployed services are separate machines and the ML service has no training pipeline or database access, so the Retrain button is disabled in production. To update the model: retrain locally, run `python check_artifacts.py`, commit the new `.pkl` and `.csv` files, and push. Render redeploys automatically.
 
-On the free tier the services sleep when idle, so the first request after a pause can take a minute.
+On the free tier the services sleep when idle, so the first request after a pause can take a minute. The app waits up to two minutes for ML requests; if an initial request still fails while a service wakes, use the retry button or reload once the service is awake.
 
 ## Project structure
 

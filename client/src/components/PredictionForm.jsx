@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getCrops, getMarkets } from '../services/api';
 
 export default function PredictionForm({ onPredict, loading }) {
@@ -9,22 +9,25 @@ export default function PredictionForm({ onPredict, loading }) {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    async function loadOptions() {
-      try {
-        const [cropList, marketList] = await Promise.all([getCrops(), getMarkets()]);
-        setCrops(cropList);
-        setMarkets(marketList);
-        if (cropList.length) setSelectedCrop(cropList[0]);
-        if (marketList.length) setSelectedMarket(marketList[0]);
-      } catch (err) {
-        setError('Could not load crop/market list. Is the backend running?');
-      } finally {
-        setLoadingOptions(false);
-      }
+  const loadOptions = useCallback(async () => {
+    setLoadingOptions(true);
+    setError('');
+    try {
+      const [cropList, marketList] = await Promise.all([getCrops(), getMarkets()]);
+      setCrops(cropList);
+      setMarkets(marketList);
+      if (cropList.length) setSelectedCrop(cropList[0]);
+      if (marketList.length) setSelectedMarket(marketList[0]);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not load crop and market options. Please try again.');
+    } finally {
+      setLoadingOptions(false);
     }
-    loadOptions();
   }, []);
+
+  useEffect(() => {
+    loadOptions();
+  }, [loadOptions]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -37,7 +40,18 @@ export default function PredictionForm({ onPredict, loading }) {
   }
 
   if (error) {
-    return <p className="text-red-600">{error}</p>;
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-red-600">{error}</p>
+        <button
+          type="button"
+          onClick={loadOptions}
+          className="text-sm text-green-700 underline hover:text-green-800"
+        >
+          Retry loading options
+        </button>
+      </div>
+    );
   }
 
   return (
