@@ -113,6 +113,8 @@ python check_artifacts.py
 | Server | Render | Root `server`. Set `MONGO_URI`, `ADMIN_KEY`, `ML_SERVICE_URL`, `CLIENT_URL`, `NODE_ENV=production`, `RETRAIN_ENABLED=false`. Health check path: `/health` or `/api/health` |
 | ML service | Render | Root `ml-service`. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT` |
 
+For the Server's `ML_SERVICE_URL`, use the ML service's Render internal URL (or its public URL), including the scheme and port if shown. Do not use `http://localhost:8000` in Render: the Server and ML service run in separate containers. The localhost value in `server/.env.example` is for local development only. Check the ML service's `/health` endpoint if requests still fail.
+
 **Retraining is local only.** The deployed services are separate machines and the ML service has no training pipeline or database access, so the Retrain button is disabled in production. To update the model: retrain locally, run `python check_artifacts.py`, commit the new `.pkl` and `.csv` files, and push. Render redeploys automatically.
 
 On the free tier the services sleep when idle, so the first request after a pause can take a minute.
