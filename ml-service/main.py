@@ -25,6 +25,7 @@ for var in ("CLIENT_URL", "SERVER_URL"):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://[a-zA-Z0-9-]+\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -40,11 +41,11 @@ FEATURE_COLS = [
 model = None
 crop_encoder = None
 market_encoder = None
-features_df = None   
-latest_df = None     
+features_df = None
+latest_df = None
 rf_model = None
 ensemble_weights = None
-crop_error = {}      
+crop_error = {}
 
 
 @app.on_event("startup")
